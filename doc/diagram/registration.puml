@@ -1,0 +1,35 @@
+@startuml registration
+
+actor User
+entity CLI
+entity API
+collections Library
+
+header Registration
+footer Page %page% of %lastpage%
+
+autonumber
+
+title Register: new username registration
+User -> CLI: jobber register <username>
+CLI -> API: Register(RegisterRequest{username: <username>})
+
+API -/ API: UsernameExists(<username>) = false
+API -/ API: saveUsername(<username>)
+API -> Library: GenerateClientCertificate()
+Library -> API: <certificate>
+API -/ API: saveCertificate(<username>, <certificate>)
+API -> CLI: RegisterResponse{\n\tcertificate: <certificate>\n}
+CLI -> CLI: saveCertificate(<certificate>)
+CLI -> User: <email> registered
+
+newpage Register: existing username registration
+
+autonumber 1
+User -> CLI: jobber register <username>
+CLI -> API: Register(RegisterRequest{username: <username>})
+API -/ API: UsernameExists(<username>) = true
+API -> CLI: RegisterResponse{\n\terror: "Username already exists"\n}
+CLI -> User: <username> already exists
+
+@enduml

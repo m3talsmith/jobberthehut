@@ -1,0 +1,10 @@
+# Jobber The Hut
+
+A system that allows you to securely execute arbitrary executibles securely.
+
+## Build
+
+### Requirements
+
+- [protoc](https://grpc.io/)
+- [Go 1.25](https://go.dev)

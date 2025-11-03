@@ -1,0 +1,7 @@
+message RegisterRequest {
+    string email = 1;
+}
+
+message RegisterResponse {
+    string certificate = 1;
+}
