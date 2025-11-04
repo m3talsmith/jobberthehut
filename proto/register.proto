@@ -1,7 +1,9 @@
 message RegisterRequest {
-    string email = 1;
+    string username = 1;
 }
 
 message RegisterResponse {
     string certificate = 1;
+    string error = 2;
+    string info = 3;
 }
