@@ -1,8 +1,5 @@
 syntax = "proto3";
 package jobber;
 
-option go_package = "github.com/jobber-the-hut/jobber/proto";
-
 service Jobber {
-    rpc Register(RegisterRequest) returns (RegisterResponse);
 }
