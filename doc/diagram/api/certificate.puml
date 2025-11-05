@@ -1,0 +1,37 @@
+@startuml certificate
+actor Caller
+entity API
+collections Library
+
+autonumber
+header Certificate
+footer Page %page% of %lastpage%
+
+title Certificate: valid certificate
+
+Caller -> API: <request>
+...
+API -> API: Get certificate from mTLS client certificate
+API -> Library: NewCertificate(<certificate>)
+Library -> API: certificate *Certificate
+API -> API: <process request>
+API -> Caller: [HttpOk] <response>
+
+newpage Certificate: invalid certificate
+autonumber 1
+
+Caller -> API: <request>
+...
+API -> Caller: [HttpNotAuthorized] <response type>(error: <error message>)
+
+newpage Certificate: valid certificate, error
+autonumber 1
+
+Caller -> API: <request>
+...
+API -> API: Get certificate from mTLS client certificate
+API -> Library: NewCertificate(<certificate>)
+Library -> API: err ErrorCertificate
+API -> Caller: [HttpInternalServerError] <response type>(error: err)
+
+@enduml

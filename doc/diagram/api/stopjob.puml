@@ -1,0 +1,49 @@
+@startuml stopjob
+
+actor Caller
+entity API
+collections Library
+
+autonumber
+header StopJob
+footer Page %page% of %lastpage%
+
+title StopJob: successful request
+
+Caller -> API: StopJobRequest(job_id:<job_id>)
+...
+API -> API: process certificate
+API -> API: get job ID from StopJobRequest
+API -> Library: certificate.GetJob(job_id)
+Library -> API: job *Job
+API -> Library: job.Stop()
+Library -> API: nil
+API -> Caller: StopJobResponse(error: nil)
+
+newpage StopJob: job has already been stopped
+autonumber 1
+
+Caller -> API: StopJobRequest(job_id:<job_id>)
+...
+API -> API: process certificate
+API -> API: get job ID from StopJobRequest
+API -> Library: certificate.GetJob(job_id)
+Library -> API: job *Job
+API -> API: job.Stop()
+Library -> API: err ErrorJobAlreadyStopped (or other appropriate messages for the error)
+API -> Caller: StopJobResponse(error: err)
+
+newpage StopJob: error stopping job
+autonumber 1
+
+Caller -> API: StopJobRequest(job_id:<job_id>)
+...
+API -> API: process certificate
+API -> API: get job ID from StopJobRequest
+API -> Library: certificate.GetJob(job_id)
+Library -> API: job *Job
+API -> API: job.Stop()
+Library -> API: err ErrorJobStop (or other appropriate messages for the error)
+API -> Caller: StopJobResponse(error: err)
+
+@enduml

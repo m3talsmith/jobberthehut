@@ -1,0 +1,35 @@
+@startuml startjob
+actor Caller
+entity API
+collections Library
+
+autonumber
+header StartJob
+footer Page %page% of %lastpage%
+
+title StartJob: successful request
+
+Caller -> API: StartJobRequest(command:<command>)
+...
+API -> API: process certificate
+API -> API: get command from StartJobRequest
+API -> Library: certificate.NewJob(<command>)
+Library -> API: job *Job
+API -> Library: job.Start()
+Library -> API: nil
+API -> Caller: StartJobResponse(job: job, error: nil)
+
+newpage StartJob: error starting job
+autonumber 1
+
+Caller -> API: StartJobRequest(command:<command>)
+...
+API -> API: process certificate
+API -> API: get command from StartJobRequest
+API -> Library: certificate.NewJob(<command>)
+Library -> API: job *Job
+API -> Library: job.Start()
+Library -> API: err ErrorJobStart
+API -> Caller: StartJobResponse(job: nil, error: err)
+
+@enduml

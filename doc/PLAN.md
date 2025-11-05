@@ -1,4 +1,6 @@
-# Plan
+# The Plan
+
+This plan is being created to help implement the [Teleport challenge 1, level 5](https://github.com/gravitational/careers/blob/main/challenges/systems/challenge-1.md#level-5).
 
 ## Library
 
@@ -21,7 +23,7 @@ If there was an error (e.g. read permissions issue) it returns a `ErrorCertifica
 
 In order to manage the jobs, the library will expose the following functions:
 
-- `func NewCertificate(pem []byte) (cert *Certificate, err ErrorCertificate)`: instantiate a certificate from a pem
+- `func NewCertificate(pem []byte) (cert *Certificate, err ErrorCertificate)`: instantiate and save a certificate from a pem
 - `func (*Certificate) Bytes() (pem []byte)`: return the pem of a certificate
 - `func (*Certificate) Hash() (hash string)`: sha256 hash the contents of a certificate
 - `func (*Certificate) GetJobs() (jobs []*Job, err ErrorCertificate)`: get a list of jobs
@@ -29,14 +31,22 @@ In order to manage the jobs, the library will expose the following functions:
 - `func (*Certificate) GenerateJobID() (id int)`: generate the next ID for a job
 - `func (*Certificate) NewJob(cmd string) (job *Job, err ErrorCertificate)`: instantiate a job with a command
 - `func (*Job) Start() (err ErrorJob)`: start a job
-- `func (*Job) Tail(readTo []byte, offset int64) (err ErrorJob)`: read a given amount of lines from the end of the log
+- `func (*Job) ReadLog(writeTo []byte) (err ErrorJob)`: read all lines from the log, order from first to last
 - `func (*Job) Stop() (err ErrorJob)`: stop a job
 
 #### NewCertificate
 
-The `NewCertificate` function takes a `[]byte` representation of a certificate pem.
+The `NewCertificate` function takes a `[]byte` representation of a certificate.
 
-It checks to see if the certificate is valid (e.g. by parsing it, looking at the certificate pool in storage, etc.) and returns a `*Certificate` if true. If false, it returns an `ErrorCertificate`.
+It checks to see if the certificate is valid and returns a `*Certificate` if true. If false, it returns an `ErrorCertificate`.
+
+If the certificate is valid but doesn't exist in storage, an entry in storage will be created with the certificate's hash.
+
+Client certificate validation works like the following:
+
+1. Hash the client certificate
+1. Check to see if the certificate hash is in the client certificate hash pool
+1. Return appropriate response (valid or not valid; true or false)
 
 #### Bytes
 
@@ -81,9 +91,9 @@ If the hash exists as a directory in storage, then we:
 
 If there an error, it returns an `ErrorJob`.
 
-#### Tail
+#### ReadLog
 
-The `(*Job) Tail` function takes a variable to write to as `[]byte` and attempts to read the job log. If it can read the log, it writes it to this variable. If it cannot read the log, it returns an `ErrorJob`.
+The `(*Job) ReadLog` function takes a variable to write to as `[]byte` and attempts to read the job log. If it can read the log, it writes it to this variable. If it cannot read the log, it returns an `ErrorJob`.
 
 #### Stop
 
@@ -95,19 +105,31 @@ The `(*Job) Stop` function attempts to stop the job. It does this by:
 
 If there is an error, then a `ErrorJob` is returned.
 
+### Components
+
+The library is layered in the following components:
+
+![Component layer structure](./diagram/library/components.png)
+
+Where:
+
+- Storage is a layer to abstract away the configuration and temporary layers
+- Storage contains many certificates
+- Each certificate contains many jobs
+
 ### Storage
 
 #### Configuration
 
 The configuration will be in this structure:
 
-```
-<root>
+<pre>
+~/.jobber
 ├── pool
-│   ├── <certificate>
+│   ├── certificate
 │   └── ...
 └── ...
-```
+</pre>
 
 This allows us to store certs in a pool to be used at a future point in time.
 
@@ -115,19 +137,20 @@ This allows us to store certs in a pool to be used at a future point in time.
 
 The jobs will be written as ephemeral to this structure:
 
-```
+<pre>
 /
 ├── tmp
 │   └── jobber
 │       └── jobs
-│           ├── <sha256 hash of certificate>
-│           │   ├── <job uuid>
-│           |   |   ├── pid
-│           |   |   └── log
+│           ├── sha256 hash of a certificate
+│           │   ├── job id
+│           |   |   ├── command
+│           |   |   ├── log
+│           |   |   └── pid
 │           |   └── ...
 │           └── ...
 └── ...
-```
+</pre>
 
 This gives us the ability to:
 
@@ -136,6 +159,154 @@ This gives us the ability to:
 
 ## API
 
-### mTLS support
+### Features
 
+1. Start a job
+1. Get a list of jobs
+1. Get the logs of a job
+1. Stop a job
 
+### gRPC and mTLS
+
+The **API** will use [gRPC](https://grpc.io/) and [protobufs](https://protobuf.dev/) for all communications, over [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS). This gives us a compact, type safe, data structure over a zero trust form of security.
+
+Since we are sending over mTLS, we can treat the client certificate as the identifier for the user and will not need to create additional protobuf messages for the user authentication and verification.
+
+### mTLS certificate behavior
+
+1. All client certificates will be loaded when the server starts. For the sake of the MVP, we assume that no new certificates are being created while the server is running, and thus can rely on this method.
+1. If a certificate is used that does not belong to the client certificate pool, the caller will recieve a HttpNotAuthorized response from the server.
+1. If the certificate is valid, but a different certificate error has occurred while using it, an HttpInternalServerError response will be sent back with the appropriate error message.
+1. If the certificate is valid and no errors have occurred, the request will be processed as normal
+
+The following requests assume this behavior and will not touch on it in the description or diagrams.
+
+Example workflows are provided below:
+
+![Invalid certificate](./diagram/api/certificate_001.png)
+![Valid certificate with error](./diagram/api/certificate_002.png)
+![Valid certificate with no error](./diagram/api/certificate.png)
+
+### A representation of a Job
+
+A **Job** is an arbitrary command to be executed at a future point. We will need to be able to get its logs, get its status, and stop it mid run.
+
+It could be represented like this:
+
+```
+message Job {
+    int64 id = 1;
+    string command = 2;
+    string created_at = 4;
+    bool finished = 6;
+}
+```
+
+Where the:
+
+- id: represents its ID in the system
+- command: represents its command to be run
+- created_at: represents when it was started
+- finished: represents whether it is finished running or not
+
+### Start a job
+
+To `create` and `start` a **Job**, you would pass a **StartJobRequest** and recieve a **StartJobResponse** through the `StartJob` rpc as represented below:
+
+```
+message StartJobRequest {
+    string command = 1;
+}
+
+message StartJobResponse {
+    Job job = 1;
+    string error = 2;
+}
+```
+
+A successful request flow will look this:
+
+![Successful job start request](./diagram/api/startjob.png)
+
+If there is a problem starting the job, the flow will look like this:
+
+![Error starting job](./diagram/api/startjob_001.png)
+
+### Get a list of jobs
+
+In order to more easily find a job - one you may want to get the detail of - it may be necessary to list all the current jobs. To that end, the `GetJobs` rpc exists.
+
+You would pass a **GetJobsRequest** and recieve a **GetJobsResponse** through the `GetJobs` rpc as represented below:
+
+```
+message GetJobsRequest {
+}
+
+message GetJobsResponse {
+    repeated Job jobs = 1;
+    string error = 2;
+}
+```
+
+If there are jobs to list, then you would recieve back a list of the jobs. The workflow would look like this:
+
+![Jobs to list](./diagram/api/getjobs.png)
+
+If there are no jobs to list, but no errors either, then you would recieve an empty list of jobs. The workflow would look like this:
+
+![No jobs to list](./diagram/api/getjobs_001.png)
+
+If an error arises, you would get a response back with the error filled out. The workflow would look like this:
+
+![Error listing jobs](./diagram/api/getjobs_002.png)
+
+### Get the logs of a job
+
+To get the logs for a **Job**, you need send the job ID in the request using the `GetJobLog` rpc. The messages for the protobuf look like this:
+
+```
+message GetJobLogRequest {
+    int64 job_id = 1;
+}
+
+message GetJobLogResponse {
+    string log = 1;
+    string error = 2;
+}
+```
+
+You can get the job ID by listing all jobs through the `GetJobs` rpc and choosing the job ID that you are interested in.
+
+If a job exists, the workflow looks like this:
+
+![Found job log](./diagram/api/getjob.png)
+
+If a job does not exists, the workflow looks like this:
+
+![Error getting job log](./diagram/api/getjob_001.png)
+
+### Stop a job
+
+In order to stop a **Job**, you need to send the job ID in the request using the `StopJob` rpc. The messages for the protobuf look like this:
+
+```
+message StopJobRequest {
+    int64 job_id = 1;
+}
+
+message StopJobResponse {
+    string error = 1;
+}
+```
+
+A successful workflow looks like this:
+
+![Succesful job stop request](./diagram/api/stopjob.png)
+
+If the job has already been stopped, you should get an error. The workflow looks like this:
+
+![Error, job has already been stopped](./diagram/api/stopjob_001.png)
+
+If there was any other error, the workflow looks like this:
+
+![Error, stopping job](./diagram/api/stopjob_002.png)

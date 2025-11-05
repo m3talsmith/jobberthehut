@@ -1,0 +1,34 @@
+@startuml getjob
+actor Caller
+entity API
+collections Library
+
+autonumber
+header GetJob
+footer Page %page% of %lastpage%
+
+title GetJob: successful request
+
+Caller -> API: GetJobLogRequest(job_id:<job_id>)
+...
+API -> API: process certificate
+API -> API: get job ID from GetJobLogRequest
+API -> Library: certificate.GetJob(job_id)
+Library -> API: job *Job
+API -> API: create writeTo buffer
+API -> Library: job.ReadLog(writeTo)
+Library -> API: nil
+API -> Caller: GetJobLogResponse(log: writeTo, error: nil)
+
+newpage GetJob: error getting job log
+autonumber 1
+
+Caller -> API: GetJobLogRequest(job_id:<job_id>)
+...
+API -> API: process certificate
+API -> API: get job ID from GetJobLogRequest
+API -> Library: certificate.GetJob(job_id)
+Library -> API: err ErrorJobLogNotFound (or other appropriate messages for the error)
+API -> Caller: GetJobLogResponse(log: nil, error: err)
+
+@enduml
