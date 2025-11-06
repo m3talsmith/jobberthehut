@@ -10,6 +10,7 @@ message Job {
 
 message StartJobRequest {
     string command = 1;
+    bool tail = 2;
 }
 
 message StartJobResponse {
@@ -27,6 +28,7 @@ message GetJobsResponse {
 
 message GetJobLogRequest {
     int64 job_id = 1;
+    bool tail = 2;
 }
 
 message GetJobLogResponse {

@@ -216,6 +216,7 @@ To `create` and `start` a **Job**, you would pass a **StartJobRequest** and reci
 ```
 message StartJobRequest {
     string command = 1;
+    bool tail = 2;
 }
 
 message StartJobResponse {
@@ -267,6 +268,7 @@ To get the logs for a **Job**, you need send the job ID in the request using the
 ```
 message GetJobLogRequest {
     int64 job_id = 1;
+    bool tail = 2;
 }
 
 message GetJobLogResponse {
@@ -310,6 +312,66 @@ If the job has already been stopped, you should get an error. The workflow looks
 If there was any other error, the workflow looks like this:
 
 ![Error, stopping job](./diagram/api/stopjob_002.png)
+
+
+### The full service protobuf
+
+For the purpose of clarifying what the service looks like, the protobu is below in full:
+
+```
+syntax = "proto3";
+package jobber;
+
+message Job {
+    int64 id = 1;
+    string command = 2;
+    string created_at = 4;
+    bool finished = 6;
+}
+
+message StartJobRequest {
+    string command = 1;
+    bool tail = 2;
+}
+
+message StartJobResponse {
+    Job job = 1;
+    string error = 2;
+}
+
+message GetJobsRequest {
+}
+
+message GetJobsResponse {
+    repeated Job jobs = 1;
+    string error = 2;
+}
+
+message GetJobLogRequest {
+    int64 job_id = 1;
+    bool tail = 2;
+}
+
+message GetJobLogResponse {
+    string log = 1;
+    string error = 2;
+}
+
+message StopJobRequest {
+    int64 job_id = 1;
+}
+
+message StopJobResponse {
+    string error = 1;
+}
+
+service Jobber {
+    rpc StartJob(StartJobRequest) returns (StartJobResponse);
+    rpc GetJobs(GetJobsRequest) returns (GetJobsResponse);
+    rpc GetJobLog(GetJobLogRequest) returns (GetJobLogResponse);
+    rpc StopJob(StopJobRequest) returns (StopJobResponse);
+}
+```
 
 ## CLI
 
