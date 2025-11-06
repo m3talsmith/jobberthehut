@@ -310,3 +310,148 @@ If the job has already been stopped, you should get an error. The workflow looks
 If there was any other error, the workflow looks like this:
 
 ![Error, stopping job](./diagram/api/stopjob_002.png)
+
+## CLI
+
+The CLI is used as an easy way to communicate with the API server to manage jobs.
+
+### Features
+
+- Start a job
+- Get a list of jobs
+- Get the log of a job
+- Stop a job
+
+### Command structure
+
+The syntax to run a CLI command is: `jb <cli command> <options> <argument>`
+
+### Start a job
+
+To start a job, you use the `start` cli command and pass it a command as an argument: `jb start <options> ls -lah /`
+
+A success will display the resulting details as a table like this:
+
+```
+Job started:
++---------------+---------------+---------------+---------------+
+| ID            | Command       | Created       | Status        |
++---------------+---------------+---------------+---------------+
+| 123456        | ls -lah /     | some date     | Running       |
++---------------+---------------+---------------+---------------+
+```
+
+You can get the logged streamed to you, using the `-f` option does on the log command, until `ctrl+c` is pressed. To get more, see options below.
+
+A successful workflow for the cli command looks like this:
+
+![Start job success](./diagram/cli/startjob.png)
+
+Using the tail workflow would look like this:
+
+![Start job tail success](./diagram/cli/startjob_001.png)
+
+An unsuccessful workflow for the cli command looks like this:
+
+![Start job error](./diagram/cli/startjob_002.png)
+
+#### Options
+
+| Flag  | Description           |
+|-------|-----------------------|
+| -f    | Tail log              |
+| -q    | Quiet stdout messages |
+| -json | Output as json        |
+
+
+### Get a list of jobs
+
+To list current jobs, you use the `list` cli command with no arguments: `jb list <options>`
+
+A success will display the resulting jobs details as a table like this:
+
+```
+Jobs found:
++---------------+--------------------+---------------+---------------+
+| ID            | Command            | Created       | Status        |
++---------------+--------------------+---------------+---------------+
+| 123456        | ls -lah /          | some date     | Running       |
++---------------+--------------------+---------------+---------------+
+| 654321        | echo "hello world" | some date     | Finished      |
++---------------+--------------------+---------------+---------------+
+```
+
+A successful workflow for the cli command looks like this:
+
+![List jobs success](./diagram/cli/listjobs.png)
+
+An empty list of jobs workflow for the cli command looks like this:
+
+![List jobs empty](./diagram/cli/listjobs_001.png)
+
+An error state workflow for the cli command looks like this:
+
+![List jobs error](./diagram/cli/listjobs_002.png)
+
+#### Options
+
+| Flag  | Description           |
+|-------|-----------------------|
+| -json | Output as json        |
+
+### Get the log of a job
+
+To get the log of a job, you use the `log` cli command and pass it the job id as an argument: `jb log <options> 12345`
+
+By default, a successful call with return the latest log snapshot, looking like this:
+
+```
+log line 1
+log line 2
+something else
+etc...
+log last line
+```
+
+A successful workflow looks like this:
+
+![Default log request without an error](./diagram/cli/logjob.png)
+
+There is an option that replicates the linux command: `tail -f`. In this case, a successful call will stream the log to you, line by line until you press `ctr+c`.
+
+A successful workflow looks like this:
+
+![Tail log request without an error](./diagram/cli/logjob_001.png)
+
+If there is an error in any of the calls, the workflow will look like this:
+
+![Log request with an error](./diagram/cli/logjob_002.png)
+
+#### Options
+
+| Flag  | Description           |
+|-------|-----------------------|
+| -f    | Tail log              |
+
+### Stop a job
+
+To stop a job, you use the `stop` cli command and pass it the job id as an argument: `jb stop 12345`
+
+The response of a successful call will display like this:
+
+```
+Job stopped:
++---------------+---------------+---------------+---------------+
+| ID            | Command       | Created       | Status        |
++---------------+---------------+---------------+---------------+
+| 123456        | ls -lah /     | some date     | Stopped       |
++---------------+---------------+---------------+---------------+
+```
+
+A successful request workflow looks like this:
+
+![Job stopped successfully](./diagram/cli/stopjob.png)
+
+If there is an error, the workflow looks like this:
+
+![Job stop had an error](./diagram/cli/stopjob_001.png)
