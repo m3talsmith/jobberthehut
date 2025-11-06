@@ -317,14 +317,53 @@ The CLI is used as an easy way to communicate with the API server to manage jobs
 
 ### Features
 
+These are the features we will support:
+
 - Start a job
 - Get a list of jobs
 - Get the log of a job
 - Stop a job
 
+### Non-features
+
+These are the features that we have no intention of supporting:
+
+- cli command or options auto complete
+
 ### Command structure
 
 The syntax to run a CLI command is: `jb <cli command> <options> <argument>`
+
+### Help, bad options, and bad commands
+
+#### Help
+
+You can get the help screen by passing the `-h` or `-help` flag. This will display the command syntax and options like this:
+
+```
+jb Help
+---
+
+Syntax: jb <cli command> <options> <argument>
+
+---
+
+-h      Show this dialog
+-help   Show this dialog
+
+# Display additional options for help with a cli command given
+
+```
+
+Each cli command will have additional fields and the help will be context aware to support this.
+
+#### Bad options
+
+If a bad option is provided, the help screen will display.
+
+#### Bad commands
+
+If a bad command is provided, the help screen will display and possible matching commands will be displayed as well
 
 ### Start a job
 
