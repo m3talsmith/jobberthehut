@@ -435,7 +435,7 @@ If there is an error in any of the calls, the workflow will look like this:
 
 ### Stop a job
 
-To stop a job, you use the `stop` cli command and pass it the job id as an argument: `jb stop 12345`
+To stop a job, you use the `stop` cli command and pass it the job id as an argument: `jb stop <options> 12345`
 
 The response of a successful call will display like this:
 
@@ -455,3 +455,9 @@ A successful request workflow looks like this:
 If there is an error, the workflow looks like this:
 
 ![Job stop had an error](./diagram/cli/stopjob_001.png)
+
+#### Options
+
+| Flag  | Description           |
+|-------|-----------------------|
+| -json | Output as json        |
