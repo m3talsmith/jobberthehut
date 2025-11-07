@@ -18,7 +18,7 @@ API -> Library: certificate.GetJob(job_id)
 Library -> API: job *Job
 API -> Library: job.Stop()
 Library -> API: nil
-API -> Caller: StopJobResponse(error: nil)
+API -> Caller: [OK] StopJobResponse(job: job)
 
 newpage StopJob: job has already been stopped
 autonumber 1
@@ -31,7 +31,7 @@ API -> Library: certificate.GetJob(job_id)
 Library -> API: job *Job
 API -> API: job.Stop()
 Library -> API: err ErrorJobAlreadyStopped (or other appropriate messages for the error)
-API -> Caller: StopJobResponse(error: err)
+API -> Caller: [INTERNAL] StopJobResponse(job: nil)
 
 newpage StopJob: error stopping job
 autonumber 1
@@ -44,6 +44,6 @@ API -> Library: certificate.GetJob(job_id)
 Library -> API: job *Job
 API -> API: job.Stop()
 Library -> API: err ErrorJobStop (or other appropriate messages for the error)
-API -> Caller: StopJobResponse(error: err)
+API -> Caller: [INTERNAL] StopJobResponse(job: nil)
 
 @enduml

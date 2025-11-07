@@ -2,41 +2,83 @@
 
 This plan is being created to help implement the [Teleport challenge 1, level 5](https://github.com/gravitational/careers/blob/main/challenges/systems/challenge-1.md#level-5).
 
+## Overview
+
+JobberTheHut is considered to be an open job running platform: anyone can run a job on it or view other jobs.
+
+### Authorization
+
+The project has these specific security constraints in regards to authorization:
+
+- Anyone can start a job (with ensuing log stream)
+- Anyone can view a job status (with ensuing log stream)
+- Only the original owner of the job can stop it
+
+We provide these guarantees through the following mechanisms:
+
+- We use mTLS for client certificate authentication on each request
+- We store metadata when each job is started that contains a hash of the owner's certificate, amoungst other data
+- We compare each request certificate's hash against the owner hash for the stop job being requested, to ensure only the owner's certificate can stop it
+
+### Resources
+
+The project is resourced constrained per job. Each job has the following resource constraints:
+
+- CPU: 25%
+- MEM: 256MB
+
+It achieves these constraints through the use of cgroups. When a job is started, the job is run in it through systemd-run with those constraints.
+
 ## Library
+
+The library is only meant to be used by the API and is internal to the project.
 
 ### Features
 
 The library will have the following features in the scope of this project:
 
-1. Provide access to the certificates from a configuration
-1. Manage jobs
+- Manage jobs
 
-### Provide access to the certificates from a configuration
+### Job processing note
 
-This is a straightforward as reading the pools from the storage and providing them via a `func GetClientCertificates() ([]*Certificate, ErrorCertificate)` function.
+In order to decide on the status of, and further manage, a job:
 
-If there are no certificatetes, it returns an empty slice of `*Certificate`.
+- Whenever a job is waiting to start, the contents of the pid file in the job directory are nil
+- Whenever a job is started, its PID is written to the pid file in the job directory
+- Whenever a job process has not exited, the contents of the exit file in the job directory are nil
+- Whenever a job process is stopped, the exit code of -1 is written to the exit file in the job directory
+- Whenever a job process exits, the exit code is written to the exit file in the job directory
+- Whenever a job process exits, the contents of the pid file in the job directory are nil
 
-If there was an error (e.g. read permissions issue) it returns a `ErrorCertificate` error.
+This gives us the ability to know the following:
+
+| PID | Exit Code | Status    |
+|-----|-----------|-----------|
+| nil | nil       | PENDING   |
+| >0  | nil       | RUNNING   |
+| nil | -1        | STOPPED   |
+| nil | 0         | COMPLETED |
+| nil | >0        | ERROR     |
 
 ### Manage jobs
 
 In order to manage the jobs, the library will expose the following functions:
 
-- `func NewCertificate(pem []byte) (cert *Certificate, err ErrorCertificate)`: instantiate and save a certificate from a pem
-- `func (*Certificate) Bytes() (pem []byte)`: return the pem of a certificate
-- `func (*Certificate) Hash() (hash string)`: sha256 hash the contents of a certificate
-- `func (*Certificate) GetJobs() (jobs []*Job, err ErrorCertificate)`: get a list of jobs
-- `func (*Certificate) GetJob(id int) (job *Job, err ErrorCertificate)`: get a job from id
-- `func (*Certificate) GenerateJobID() (id int)`: generate the next ID for a job
-- `func (*Certificate) NewJob(cmd string) (job *Job, err ErrorCertificate)`: instantiate a job with a command
-- `func (*Job) Start() (err ErrorJob)`: start a job
+- `func CertificateFrom(cert []byte) (certificate *Certificate, err ErrorCertificate)`: instantiate a `*Certificate` from a cert
+- `func (*Certificate) Bytes() (pem []byte)`: return the bytes of a `*Certificate`
+- `func (*Certificate) Hash() (hash string)`: sha256 hash the contents of a `*Certificate`
+- `func GetJobs() (jobs []*Job, err ErrorJob)`: get a slice of `*job`
+- `func GetJob(id int) (job *Job, err ErrorJob)`: get a `*Job` from id
+- `func GenerateJobID() (id int)`: generate the next ID for a `*Job`
+- `func JobFrom(cert *Certificate, cmd string) (job *Job, err ErrorJob)`: instantiate a `*Job` from a `*Certificate` and a command
+- `func (*Job) Start() (err ErrorJob)`: start a `*Job`
+- `func (*Job) Status() (err ErrorJob)`: get `*Job` status
 - `func (*Job) ReadLog(writeTo []byte) (err ErrorJob)`: read all lines from the log, order from first to last
-- `func (*Job) Stop() (err ErrorJob)`: stop a job
+- `func (*Job) Stop() (err ErrorJob)`: stop a `*Job`
 
-#### NewCertificate
+#### CertificateFrom
 
-The `NewCertificate` function takes a `[]byte` representation of a certificate.
+The `CertificateFrom` function takes a `[]byte` representation of a certificate.
 
 It checks to see if the certificate is valid and returns a `*Certificate` if true. If false, it returns an `ErrorCertificate`.
 
@@ -58,38 +100,43 @@ The `(*Certificate) Hash` function creates a sha256 hash of the certificate cont
 
 #### GetJobs
 
-The function `(*Certificate) GetJobs` returns a list of jobs for a `*Certificate` hash in storage. If there is an error (e.g. problem with read permissions) it will return an `ErrorCertificate`.
+The function `GetJobs` returns a slice of all `*Job`s in storage. If there is an error (e.g. problem with read permissions) it will return an `ErrorJob`.
 
 #### GetJob
 
-The `(*Certificate) GetJob` function takes an ID as a `int`.
+The `GetJob` function takes an ID as a `int`.
 
-It operates by looking up the job for a `*Certificate` hash in storage. If it is found it returns a `*Job`, otherwise it returns an `ErrorCertificate`.
+It operates by looking up the job by ID in storage. If it is found it returns a `*Job`, otherwise it returns an `ErrorJob`.
 
 #### GenerateJobID
 
-The `(*Certificate) GenerateJobID` function generates a new ID for a future `*Job`. It does this by looking at the length of of the return from `GetJobs` and appending a Unix timestamp to it.
+The `GenerateJobID` function generates a new ID for a future `*Job`. It does this by looking at the length of of the return from `GetJobs` and appending a Unix timestamp to it.
 
-If it is successful, it returns the ID as an `int`. If there are no jobs returned, it defaults to 1 plus the Unix timestamp. If there was an error (e.g. read permissions issue in storage) it returns an `ErrorCertificate`.
+If it is successful, it returns the ID as an `int`. If there are no jobs returned, it defaults to 1 plus the Unix timestamp. If there was an error (e.g. read permissions issue in storage) it returns an `ErrorJob`.
 
-#### NewJob
+#### JobFrom
 
-The `(*Certificate) NewJob` function attempts to create a job with a command for the certificate.
+The `JobFrom` function attempts to instantiate a `*Job` from a `*Certificate` and a command.
 
-This instantiates a `*Job` with a generated ID (using `GenerateJobID`) and returns it. If it cannot generate the ID due to some error, it will return the `ErrorCertificate`.
+This instantiates a `*Job` with a generated ID (using `GenerateJobID`) and returns it. If it cannot generate the ID due to some error, it will return the `ErrorJob`.
 
 #### Start
 
-The `(*Job) Start` function attempts to start a `*Job` for a `*Certificate` hash in storage.
+The `(*Job) Start` function attempts to start a `*Job` in storage.
 
 If the hash exists as a directory in storage, then we:
 
-1. Create a directory of the jobID in the certificate directory
+1. Create a directory of the jobID in the `/tmp/jobber` directory
 1. Create a cgroup for the job
+1. Write the certificate hash to owner in the job directory
 1. Execute the job in a cgroup with output redirected to a log in the job directory
 1. Write the job pid to the job directory
 
 If there an error, it returns an `ErrorJob`.
+
+#### JobStatus
+
+The `(*Job) Status` function attempts to find the correct status of the job. It does so by looking
 
 #### ReadLog
 
@@ -101,6 +148,7 @@ The `(*Job) Stop` function attempts to stop the job. It does this by:
 
 1. Reading the pid for the job
 1. Killing the process
+1. Writing the exit code for the job
 1. Removing the cgroup
 
 If there is an error, then a `ErrorJob` is returned.
@@ -113,48 +161,34 @@ The library is layered in the following components:
 
 Where:
 
-- Storage is a layer to abstract away the configuration and temporary layers
-- Storage contains many certificates
-- Each certificate contains many jobs
+- Storage is a layer to abstract away the temporary layer
+- Storage contains many jobs
 
 ### Storage
-
-#### Configuration
-
-The configuration will be in this structure:
-
-<pre>
-~/.jobber
-├── pool
-│   ├── certificate
-│   └── ...
-└── ...
-</pre>
-
-This allows us to store certs in a pool to be used at a future point in time.
 
 #### Jobs
 
 The jobs will be written as ephemeral to this structure:
 
-<pre>
+```
 /
 ├── tmp
-│   └── jobber
-│       └── jobs
-│           ├── sha256 hash of a certificate
-│           │   ├── job id
-│           |   |   ├── command
-│           |   |   ├── log
-│           |   |   └── pid
-│           |   └── ...
-│           └── ...
+│   ├── jobber
+│   |   ├── <job id>
+│   |   |   ├── owner       (sha256 hash of owner certificate)
+│   |   |   ├── command     (command plus arguments: e.g. echo "Hello, job!" > hello.txt)
+│   |   |   ├── log         (combined STDOUT and STDERR)
+│   |   |   ├── pid         (OS id of process)
+│   |   |   └── exit_code   (process exit code: e.g. 0)
+│   |   └── ...
+|   └── ...
 └── ...
-</pre>
+```
 
 This gives us the ability to:
 
-1. List jobs by a given certificate
+1. List jobs
+1. Filter jobs by owner or pid
 1. Access to the details of a given job
 
 ## API
@@ -162,8 +196,8 @@ This gives us the ability to:
 ### Features
 
 1. Start a job
-1. Get a list of jobs
-1. Get the logs of a job
+1. Stream the log of a job
+1. Stream the status of a job
 1. Stop a job
 
 ### gRPC and mTLS
@@ -172,20 +206,14 @@ The **API** will use [gRPC](https://grpc.io/) and [protobufs](https://protobuf.d
 
 Since we are sending over mTLS, we can treat the client certificate as the identifier for the user and will not need to create additional protobuf messages for the user authentication and verification.
 
-### mTLS certificate behavior
+### mTLS certificate and authorization behavior
 
-1. All client certificates will be loaded when the server starts. For the sake of the MVP, we assume that no new certificates are being created while the server is running, and thus can rely on this method.
-1. If a certificate is used that does not belong to the client certificate pool, the caller will recieve a HttpNotAuthorized response from the server.
-1. If the certificate is valid, but a different certificate error has occurred while using it, an HttpInternalServerError response will be sent back with the appropriate error message.
-1. If the certificate is valid and no errors have occurred, the request will be processed as normal
+1. Client certificates will be loaded per request on demand
+1. Jobs are tied through an owner by the certificate hash
+1. If a job stop is being requested, the certificate hash does not equal the owner hash, the request will be rejected with the error GRPC_STATUS_UNAUTHENTICATED
+1. All other request pass through as authorized
 
 The following requests assume this behavior and will not touch on it in the description or diagrams.
-
-Example workflows are provided below:
-
-![Invalid certificate](./diagram/api/certificate_001.png)
-![Valid certificate with error](./diagram/api/certificate_002.png)
-![Valid certificate with no error](./diagram/api/certificate.png)
 
 ### A representation of a Job
 
@@ -194,11 +222,19 @@ A **Job** is an arbitrary command to be executed at a future point. We will need
 It could be represented like this:
 
 ```
+enum JobStatus {
+    JOB_STATUS_UNKNOWN = 1;
+    JOB_STATUS_PENDING = 2;
+    JOB_STATUS_RUNNING = 3;
+    JOB_STATUS_COMPLETED = 4;
+    JOB_STATUS_FAILED = 5;
+}
+
 message Job {
     int64 id = 1;
     string command = 2;
-    string created_at = 4;
-    bool finished = 6;
+    string created_at = 3;
+    JobStatus status = 4;
 }
 ```
 
@@ -207,21 +243,19 @@ Where the:
 - id: represents its ID in the system
 - command: represents its command to be run
 - created_at: represents when it was started
-- finished: represents whether it is finished running or not
+- status: represents the state of the job process
 
 ### Start a job
 
-To `create` and `start` a **Job**, you would pass a **StartJobRequest** and recieve a **StartJobResponse** through the `StartJob` rpc as represented below:
+To `start` a **Job**, you would pass a **StartJobRequest** and recieve a **StartJobResponse** through the `StartJob` rpc as represented below:
 
 ```
 message StartJobRequest {
-    string command = 1;
-    bool tail = 2;
+    string command = 2;
 }
 
 message StartJobResponse {
     Job job = 1;
-    string error = 2;
 }
 ```
 
@@ -233,59 +267,43 @@ If there is a problem starting the job, the flow will look like this:
 
 ![Error starting job](./diagram/api/startjob_001.png)
 
-### Get a list of jobs
+### Stream the log of a job
 
-In order to more easily find a job - one you may want to get the detail of - it may be necessary to list all the current jobs. To that end, the `GetJobs` rpc exists.
-
-You would pass a **GetJobsRequest** and recieve a **GetJobsResponse** through the `GetJobs` rpc as represented below:
+To get the logs for a **Job**, you need to send the job ID in the request using the `StreamJobLog` rpc. The messages for the protobuf look like this:
 
 ```
-message GetJobsRequest {
-}
-
-message GetJobsResponse {
-    repeated Job jobs = 1;
-    string error = 2;
-}
-```
-
-If there are jobs to list, then you would recieve back a list of the jobs. The workflow would look like this:
-
-![Jobs to list](./diagram/api/getjobs.png)
-
-If there are no jobs to list, but no errors either, then you would recieve an empty list of jobs. The workflow would look like this:
-
-![No jobs to list](./diagram/api/getjobs_001.png)
-
-If an error arises, you would get a response back with the error filled out. The workflow would look like this:
-
-![Error listing jobs](./diagram/api/getjobs_002.png)
-
-### Get the logs of a job
-
-To get the logs for a **Job**, you need send the job ID in the request using the `GetJobLog` rpc. The messages for the protobuf look like this:
-
-```
-message GetJobLogRequest {
+message StreamJobLogRequest {
     int64 job_id = 1;
-    bool tail = 2;
 }
 
-message GetJobLogResponse {
+message StreamJobLogResponse {
     string log = 1;
-    string error = 2;
 }
 ```
 
-You can get the job ID by listing all jobs through the `GetJobs` rpc and choosing the job ID that you are interested in.
+The workflows go like this:
 
-If a job exists, the workflow looks like this:
+![Successful](./diagram/api/streamlog.png)
+![Error](./diagram/api/streamlog_001.png)
 
-![Found job log](./diagram/api/getjob.png)
+### Stream the status of a job
 
-If a job does not exists, the workflow looks like this:
+To get the status stream of a **Job**, you need to send the job ID in the request using the `StreamJobStatus` rpc. The messages for the protobuf look like this:
 
-![Error getting job log](./diagram/api/getjob_001.png)
+```
+message StreamJobStatusRequest {
+    int64 job_id = 1;
+}
+
+message StreamJobStatusResponse {
+    JobStatus status = 1;
+}
+```
+
+The workflows go like this:
+
+![Successful](./diagram/api/streamstatus.png)
+![Error](./diagram/api/streamstatus_001.png)
 
 ### Stop a job
 
@@ -297,7 +315,7 @@ message StopJobRequest {
 }
 
 message StopJobResponse {
-    string error = 1;
+    Job job = 1;
 }
 ```
 
@@ -316,59 +334,66 @@ If there was any other error, the workflow looks like this:
 
 ### The full service protobuf
 
-For the purpose of clarifying what the service looks like, the protobu is below in full:
+For the purpose of clarifying what the service looks like, the protobuf is below in full:
 
 ```
 syntax = "proto3";
+
 package jobber;
+option go_package = "github.com/jobberthehut/jobber/proto";
+
+enum JobStatus {
+    JOB_STATUS_ERROR = 1;
+    JOB_STATUS_PENDING = 2;
+    JOB_STATUS_RUNNING = 3;
+    JOB_STATUS_COMPLETED = 4;
+    JOB_STATUS_FAILED = 5;
+    JOB_STATUS_STOPPED = 6;
+}
 
 message Job {
     int64 id = 1;
     string command = 2;
-    string created_at = 4;
-    bool finished = 6;
+    string created_at = 3;
+    JobStatus status = 4;
 }
 
 message StartJobRequest {
-    string command = 1;
-    bool tail = 2;
+    string command = 2;
 }
 
 message StartJobResponse {
     Job job = 1;
-    string error = 2;
 }
 
-message GetJobsRequest {
-}
-
-message GetJobsResponse {
-    repeated Job jobs = 1;
-    string error = 2;
-}
-
-message GetJobLogRequest {
+message StreamJobStatusRequest {
     int64 job_id = 1;
-    bool tail = 2;
 }
 
-message GetJobLogResponse {
+message StreamJobStatusResponse {
+    JobStatus status = 1;
+}
+
+message StreamJobLogRequest {
+    int64 job_id = 1;
+}
+
+message StreamJobLogResponse {
     string log = 1;
-    string error = 2;
 }
 
 message StopJobRequest {
-    int64 job_id = 1;
+    int64 job_id = 2;
 }
 
 message StopJobResponse {
-    string error = 1;
+    Job job = 1;
 }
 
 service Jobber {
     rpc StartJob(StartJobRequest) returns (StartJobResponse);
-    rpc GetJobs(GetJobsRequest) returns (GetJobsResponse);
-    rpc GetJobLog(GetJobLogRequest) returns (GetJobLogResponse);
+    rpc StreamJobStatus(StreamJobStatusRequest) returns (stream StreamJobStatusResponse);
+    rpc StreamJobLog(StreamJobLogRequest) returns (stream StreamJobLogResponse);
     rpc StopJob(StopJobRequest) returns (StopJobResponse);
 }
 ```
@@ -381,9 +406,9 @@ The CLI is used as an easy way to communicate with the API server to manage jobs
 
 These are the features we will support:
 
+- Client certificate
 - Start a job
-- Get a list of jobs
-- Get the log of a job
+- Stream the status of a job
 - Stop a job
 
 ### Non-features
@@ -396,7 +421,7 @@ These are the features that we have no intention of supporting:
 
 The syntax to run a CLI command is: `jb <cli command> <options> <argument>`
 
-### Help, bad options, and bad commands
+### Help and bad commands
 
 #### Help
 
@@ -419,94 +444,39 @@ Syntax: jb <cli command> <options> <argument>
 
 Each cli command will have additional fields and the help will be context aware to support this.
 
-#### Bad options
-
-If a bad option is provided, the help screen will display.
-
 #### Bad commands
 
 If a bad command is provided, the help screen will display and possible matching commands will be displayed as well
+
+### Client certificate
+
+The client certificate process is handled by using the config generated before you can manage jobs. Every request to the API requires a client cert.
+
+To generate the config, use the `jb init` command.
+
+This generates the client certificate and creates the following folder structure:
+
+```
+~
+├── .jobber
+|   ├── client.pem
+|   └── client-key.pem
+└── ...
+```
+
+The process workflow looks like this:
+
+![Initialize config](./diagram/cli/clientcert.png)
 
 ### Start a job
 
 To start a job, you use the `start` cli command and pass it a command as an argument: `jb start <options> ls -lah /`
 
-A success will display the resulting details as a table like this:
+A success will display the resulting details will look like this:
 
 ```
-Job started:
-+---------------+---------------+---------------+---------------+
-| ID            | Command       | Created       | Status        |
-+---------------+---------------+---------------+---------------+
-| 123456        | ls -lah /     | some date     | Running       |
-+---------------+---------------+---------------+---------------+
-```
-
-You can get the logged streamed to you, using the `-f` option does on the log command, until `ctrl+c` is pressed. To get more, see options below.
-
-A successful workflow for the cli command looks like this:
-
-![Start job success](./diagram/cli/startjob.png)
-
-Using the tail workflow would look like this:
-
-![Start job tail success](./diagram/cli/startjob_001.png)
-
-An unsuccessful workflow for the cli command looks like this:
-
-![Start job error](./diagram/cli/startjob_002.png)
-
-#### Options
-
-| Flag  | Description           |
-|-------|-----------------------|
-| -f    | Tail log              |
-| -q    | Quiet stdout messages |
-| -json | Output as json        |
-
-
-### Get a list of jobs
-
-To list current jobs, you use the `list` cli command with no arguments: `jb list <options>`
-
-A success will display the resulting jobs details as a table like this:
-
-```
-Jobs found:
-+---------------+--------------------+---------------+---------------+
-| ID            | Command            | Created       | Status        |
-+---------------+--------------------+---------------+---------------+
-| 123456        | ls -lah /          | some date     | Running       |
-+---------------+--------------------+---------------+---------------+
-| 654321        | echo "hello world" | some date     | Finished      |
-+---------------+--------------------+---------------+---------------+
-```
-
-A successful workflow for the cli command looks like this:
-
-![List jobs success](./diagram/cli/listjobs.png)
-
-An empty list of jobs workflow for the cli command looks like this:
-
-![List jobs empty](./diagram/cli/listjobs_001.png)
-
-An error state workflow for the cli command looks like this:
-
-![List jobs error](./diagram/cli/listjobs_002.png)
-
-#### Options
-
-| Flag  | Description           |
-|-------|-----------------------|
-| -json | Output as json        |
-
-### Get the log of a job
-
-To get the log of a job, you use the `log` cli command and pass it the job id as an argument: `jb log <options> 12345`
-
-By default, a successful call with return the latest log snapshot, looking like this:
-
-```
+Job 12345 started:
+---
 log line 1
 log line 2
 something else
@@ -514,25 +484,39 @@ etc...
 log last line
 ```
 
+The log portion being streamed to you until `ctrl+c` is pressed.
+
+A successful workflow for the cli command looks like this:
+
+![Start job tail success](./diagram/cli/startjob.png)
+
+An unsuccessful workflow for the cli command looks like this:
+
+![Start job error](./diagram/cli/startjob_001.png)
+
+
+### Get the status of a job
+
+To get the status of a job, you use the `status` cli command and pass it the job id as an argument: `jb log <options> 12345`
+
+A successful call will stream the log to you, line by line until you press `ctr+c` like this:
+
+```
+Job 12345 status:
+---
+PENDING
+RUNNING
+etc...
+COMPLETED
+```
+
 A successful workflow looks like this:
 
-![Default log request without an error](./diagram/cli/logjob.png)
-
-There is an option that replicates the linux command: `tail -f`. In this case, a successful call will stream the log to you, line by line until you press `ctr+c`.
-
-A successful workflow looks like this:
-
-![Tail log request without an error](./diagram/cli/logjob_001.png)
+![Default log request without an error](./diagram/cli/streamstatus.png)
 
 If there is an error in any of the calls, the workflow will look like this:
 
-![Log request with an error](./diagram/cli/logjob_002.png)
-
-#### Options
-
-| Flag  | Description           |
-|-------|-----------------------|
-| -f    | Tail log              |
+![Log request with an error](./diagram/cli/streamstatus_001.png)
 
 ### Stop a job
 
@@ -541,12 +525,7 @@ To stop a job, you use the `stop` cli command and pass it the job id as an argum
 The response of a successful call will display like this:
 
 ```
-Job stopped:
-+---------------+---------------+---------------+---------------+
-| ID            | Command       | Created       | Status        |
-+---------------+---------------+---------------+---------------+
-| 123456        | ls -lah /     | some date     | Stopped       |
-+---------------+---------------+---------------+---------------+
+Job 12345 stopped
 ```
 
 A successful request workflow looks like this:
@@ -556,9 +535,3 @@ A successful request workflow looks like this:
 If there is an error, the workflow looks like this:
 
 ![Job stop had an error](./diagram/cli/stopjob_001.png)
-
-#### Options
-
-| Flag  | Description           |
-|-------|-----------------------|
-| -json | Output as json        |

@@ -18,7 +18,7 @@ CLI -> API: StopJobRequest(job_id:<job id>)
 API -> API: process certificate
 API -> API: get job ID from StopJobRequest
 API -> API: stop job
-API -> CLI: StopJobResponse(error: nil)
+API -> CLI: [OK] StopJobResponse(job: job)
 CLI -> STDOUT: Job stopped: job details
 CLI -> TTY: exit(0)
 
@@ -31,8 +31,8 @@ CLI -> API: StopJobRequest(job_id:<job id>)
 API -> API: process certificate
 API -> API: get job ID from StopJobRequest
 API -> API: stop job
-API -> CLI: StopJobResponse(error: err)
-CLI -> STDERR: Error stopping job: err
+API -> CLI: [INTERNAL] StopJobResponse(job: nil)
+CLI -> STDERR: Error stopping job: <error message>
 CLI -> TTY: exit(1)
 
 @enduml

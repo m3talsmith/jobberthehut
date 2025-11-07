@@ -1,0 +1,22 @@
+@startuml clientcert
+
+actor TTY
+entity CLI
+
+autonumber
+header ClientCert
+footer Page %page% of %lastpage%
+
+title ClientCert: generate config
+
+TTY -> CLI: jb init
+CLI -> CLI: create ~/.jobber
+CLI -> CLI: read embedded root.pem
+CLI -> CLI: create private.pem
+CLI -> CLI: create key.pem
+CLI -> CLI: write private.pem to ~/.jobber/private.pem
+CLI -> CLI: write key.pem to ~/.jobber/key.pem
+CLI -> TTY: config generated
+CLI -> TTY: exit(0)
+
+@enduml

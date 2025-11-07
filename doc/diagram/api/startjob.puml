@@ -13,11 +13,11 @@ Caller -> API: StartJobRequest(command:<command>)
 ...
 API -> API: process certificate
 API -> API: get command from StartJobRequest
-API -> Library: certificate.NewJob(<command>)
+API -> Library: NewJob(<certificate>, <command>)
 Library -> API: job *Job
 API -> Library: job.Start()
 Library -> API: nil
-API -> Caller: StartJobResponse(job: job, error: nil)
+API -> Caller: [OK] StartJobResponse(job: job)
 
 newpage StartJob: error starting job
 autonumber 1
@@ -26,10 +26,10 @@ Caller -> API: StartJobRequest(command:<command>)
 ...
 API -> API: process certificate
 API -> API: get command from StartJobRequest
-API -> Library: certificate.NewJob(<command>)
+API -> Library: NewJob(<certificate>, <command>)
 Library -> API: job *Job
 API -> Library: job.Start()
 Library -> API: err ErrorJobStart
-API -> Caller: StartJobResponse(job: nil, error: err)
+API -> Caller: [INTERNAL] StartJobResponse(job: nil)
 
 @enduml

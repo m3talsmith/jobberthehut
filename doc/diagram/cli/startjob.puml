@@ -18,21 +18,14 @@ CLI -> API: StartJobRequest(command:<command>)
 API -> API: process mTLS
 API -> API: get command from StartJobRequest
 API -> API: start job
-API -> CLI: StartJobResponse(job: job)
+API -> CLI: [OK] StartJobResponse(job: job)
 CLI -> STDOUT: Job started: job details
-CLI -> TTY: exit(0)
-
-newpage StartJob: tailing the log
-autonumber 1
-
-TTY -> CLI: jb start -f <command>
-CLI -> API: StartJobRequest(command:<command>)
+CLI -> API: StreamJobStatus(StreamJobStatusRequest(job_id:<job id>))
 ...
 API -> API: process mTLS
-API -> API: get command from StartJobRequest
-API -> API: start job
-API -> CLI: StartJobResponse(job: job)
-CLI -> STDOUT: Job started: job details
+API -> API: get job ID from StreamJobStatusRequest
+API -> API: get job status
+API -> CLI: [OK] StreamJobStatusResponse(status: status)
 CLI -> STDOUT: Display log lines as they are written
 ...
 TTY -> CLI: ctr+c
@@ -48,8 +41,8 @@ API -> API: process mTLS
 API -> API: get command from StartJobRequest
 API -> API: start job
 API -> API: err ErrorJobStart
-API -> CLI: StartJobResponse(error: err)
-CLI -> STDERR: Error starting job: err
+API -> CLI: [INTERNAL] StartJobResponse(job: nil)
+CLI -> STDERR: Error starting job: <error message>
 CLI -> TTY: exit(1)
 
 @enduml
