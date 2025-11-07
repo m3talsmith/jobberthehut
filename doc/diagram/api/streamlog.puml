@@ -1,0 +1,36 @@
+@startuml streamlog
+
+actor Caller
+entity API
+collections Library
+
+autonumber
+header StreamLog
+footer Page %page% of %lastpage%
+
+title StreamLog: successful request
+
+Caller -> API: StreamJobLogRequest(job_id:<job_id>)
+...
+API -> API: process certificate
+API -> API: get job ID from StreamJobLogRequest
+API -> Library: GetJob(job_id)
+Library -> API: job *Job
+API -> API: create writeTo buffer
+API -> Library: job.ReadLog(writeTo)
+Library -> API: nil
+API -> Caller: [OK] StreamJobLogResponse(log: writeTo)
+
+newpage StreamLog: error streaming log
+autonumber 1
+
+Caller -> API: StreamJobLogRequest(job_id:<job_id>)
+...
+API -> API: process certificate
+API -> API: get job ID from StreamJobLogRequest
+API -> Library: GetJob(job_id)
+Library -> API: job *Job
+Library -> API: err ErrorJobLogNotFound (or other appropriate messages for the error)
+API -> Caller: [NOT_FOUND] StreamJobLogResponse(log: nil)
+
+@enduml

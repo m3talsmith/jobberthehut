@@ -1,0 +1,40 @@
+@startuml streamstatus
+
+actor TTY
+entity STDOUT
+entity STDERR
+entity CLI
+entity API
+
+autonumber
+header StreamStatus
+footer Page %page% of %lastpage%
+
+title StreamStatus: default request
+
+TTY -> CLI: jb status <job id>
+CLI -> API: StreamJobStatus(StreamJobStatusRequest(job_id:<job id>))
+...
+API -> API: process mTLS
+API -> API: get job ID from GetJobStatusRequest
+API -> API: get job status
+API -> CLI: [OK] StreamJobStatusResponse(status: status)
+CLI -> STDOUT: Display status as it is written
+...
+TTY -> CLI: ctr+c
+CLI -> TTY: exit(0)
+
+newpage StreamStatus: error getting job status
+autonumber 1
+
+TTY -> CLI: jb status <job id>
+CLI -> API: StreamJobStatus(StreamJobStatusRequest(job_id:<job id>))
+...
+API -> API: process mTLS
+API -> API: get job ID from GetJobStatusRequest
+API -> API: get job status
+API -> CLI: [INTERNAL] StreamJobStatusResponse(status: nil)
+CLI -> STDERR: Error getting job status: <error message>
+CLI -> TTY: exit(1)
+
+@enduml

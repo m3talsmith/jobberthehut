@@ -1,0 +1,48 @@
+@startuml startjob
+
+actor TTY
+entity STDOUT
+entity STDERR
+entity CLI
+entity API
+
+autonumber
+header StartJob
+footer Page %page% of %lastpage%
+
+title StartJob: default request
+
+TTY -> CLI: jb start <command>
+CLI -> API: StartJobRequest(command:<command>)
+...
+API -> API: process mTLS
+API -> API: get command from StartJobRequest
+API -> API: start job
+API -> CLI: [OK] StartJobResponse(job: job)
+CLI -> STDOUT: Job started: job details
+CLI -> API: StreamJobStatus(StreamJobStatusRequest(job_id:<job id>))
+...
+API -> API: process mTLS
+API -> API: get job ID from StreamJobStatusRequest
+API -> API: get job status
+API -> CLI: [OK] StreamJobStatusResponse(status: status)
+CLI -> STDOUT: Display log lines as they are written
+...
+TTY -> CLI: ctr+c
+CLI -> TTY: exit(0)
+
+newpage StartJob: error starting job
+autonumber 1
+
+TTY -> CLI: jb start <command>
+CLI -> API: StartJobRequest(command:<command>)
+...
+API -> API: process mTLS
+API -> API: get command from StartJobRequest
+API -> API: start job
+API -> API: err ErrorJobStart
+API -> CLI: [INTERNAL] StartJobResponse(job: nil)
+CLI -> STDERR: Error starting job: <error message>
+CLI -> TTY: exit(1)
+
+@enduml

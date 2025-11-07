@@ -1,0 +1,38 @@
+@startuml stopjob
+
+actor TTY
+entity STDOUT
+entity STDERR
+entity CLI
+entity API
+
+autonumber
+header StopJob
+footer Page %page% of %lastpage%
+
+title StopJob: successful request
+
+TTY -> CLI: jb stop <job id>
+CLI -> API: StopJobRequest(job_id:<job id>)
+...
+API -> API: process certificate
+API -> API: get job ID from StopJobRequest
+API -> API: stop job
+API -> CLI: [OK] StopJobResponse(job: job)
+CLI -> STDOUT: Job stopped: job details
+CLI -> TTY: exit(0)
+
+newpage StopJob: error stopping job
+autonumber 1
+
+TTY -> CLI: jb stop <job id>
+CLI -> API: StopJobRequest(job_id:<job id>)
+...
+API -> API: process certificate
+API -> API: get job ID from StopJobRequest
+API -> API: stop job
+API -> CLI: [INTERNAL] StopJobResponse(job: nil)
+CLI -> STDERR: Error stopping job: <error message>
+CLI -> TTY: exit(1)
+
+@enduml

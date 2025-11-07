@@ -1,0 +1,35 @@
+@startuml streamstatus
+
+actor Caller
+entity API
+collections Library
+
+autonumber
+header StreamStatus
+footer Page %page% of %lastpage%
+
+title StreamStatus: successful request
+
+Caller -> API: StreamJobStatusRequest(job_id:<job_id>)
+...
+API -> API: process certificate
+API -> API: get job ID from StreamJobStatusRequest
+API -> Library: GetJob(job_id)
+Library -> API: job *Job
+API -> Library: job.Status()
+Library -> API: status JobStatus
+API -> Caller: [OK] StreamJobStatusResponse(status: status)
+
+newpage StreamStatus: error streaming status
+autonumber 1
+
+Caller -> API: StreamJobStatusRequest(job_id:<job_id>)
+...
+API -> API: process certificate
+API -> API: get job ID from StreamJobStatusRequest
+API -> Library: GetJob(job_id)
+Library -> API: job *Job
+Library -> API: err ErrorJobStatusNotFound (or other appropriate messages for the error)
+API -> Caller: [INTERNAL] StreamJobStatusResponse(status: JOB_STATUS_ERROR)
+
+@enduml

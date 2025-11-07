@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package jobber;
+option go_package = "github.com/jobberthehut/jobber/proto";
+
+enum JobStatus {
+    JOB_STATUS_ERROR = 1;
+    JOB_STATUS_PENDING = 2;
+    JOB_STATUS_RUNNING = 3;
+    JOB_STATUS_COMPLETED = 4;
+    JOB_STATUS_FAILED = 5;
+    JOB_STATUS_STOPPED = 6;
+}
+
+message Job {
+    int64 id = 1;
+    string command = 2;
+    string created_at = 3;
+    JobStatus status = 4;
+}
+
+message StartJobRequest {
+    string command = 2;
+}
+
+message StartJobResponse {
+    Job job = 1;
+}
+
+message StreamJobStatusRequest {
+    int64 job_id = 1;
+}
+
+message StreamJobStatusResponse {
+    JobStatus status = 1;
+}
+
+message StreamJobLogRequest {
+    int64 job_id = 1;
+}
+
+message StreamJobLogResponse {
+    string log = 1;
+}
+
+message StopJobRequest {
+    int64 job_id = 2;
+}
+
+message StopJobResponse {
+    Job job = 1;
+}
+
+service Jobber {
+    rpc StartJob(StartJobRequest) returns (StartJobResponse);
+    rpc StreamJobStatus(StreamJobStatusRequest) returns (stream StreamJobStatusResponse);
+    rpc StreamJobLog(StreamJobLogRequest) returns (stream StreamJobLogResponse);
+    rpc StopJob(StopJobRequest) returns (StopJobResponse);
+}
